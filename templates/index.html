@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WBS ↔ Outlook 同期ツール</title>
+<style>
+:root {
+  --primary:      #1565c0;
+  --primary-dk:   #0d47a1;
+  --primary-lt:   #e3f2fd;
+  --teal:         #00695c;
+  --teal-lt:      #e0f2f1;
+  --surface:      #ffffff;
+  --bg:           #f0f4f8;
+  --border:       #dde3ea;
+  --text:         #1a2332;
+  --text-sub:     #5f6b7a;
+  --green:        #2e7d32;
+  --green-bg:     #e8f5e9;
+  --orange:       #e65100;
+  --orange-bg:    #fff3e0;
+  --red:          #c62828;
+  --red-bg:       #ffebee;
+  --radius:       8px;
+  --shadow:       0 1px 4px rgba(0,0,0,.1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Meiryo UI","Yu Gothic UI","Hiragino Sans",sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── ヘッダー ─────────────────────────────────────────── */
+.app-header {
+  background: var(--primary-dk);
+  color: #fff;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  position: sticky; top: 0; z-index: 200;
+}
+.app-header h1 { font-size: 17px; font-weight: 600; letter-spacing: .3px; }
+.header-chip {
+  background: rgba(255,255,255,.18);
+  padding: 2px 10px; border-radius: 10px; font-size: 11px;
+}
+
+/* ── タブ ─────────────────────────────────────────────── */
+.tab-bar {
+  background: var(--primary);
+  display: flex;
+  padding: 0 16px;
+  gap: 2px;
+}
+.tab-btn {
+  padding: 11px 22px;
+  color: rgba(255,255,255,.65);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all .18s;
+  user-select: none;
+  white-space: nowrap;
+}
+.tab-btn:hover  { color: #fff; }
+.tab-btn.active { color: #fff; border-bottom-color: #fff; }
+
+/* ── コンテンツ ───────────────────────────────────────── */
+.page { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── カード ───────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.card-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── フォーム ─────────────────────────────────────────── */
+.form-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 180px;
+}
+.form-group label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.form-ctrl {
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  transition: border-color .15s;
+}
+.form-ctrl:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-lt); }
+select.form-ctrl { cursor: pointer; }
+
+/* ── ボタン ───────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s, transform .08s;
+  white-space: nowrap;
+  user-select: none;
+}
+.btn:active:not(:disabled) { transform: scale(.97); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-sm { height: 30px; padding: 0 12px; font-size: 12px; }
+
+.btn-blue   { background: var(--primary); color: #fff; }
+.btn-blue:hover:not(:disabled) { background: var(--primary-dk); }
+
+.btn-teal   { background: var(--teal); color: #fff; }
+.btn-teal:hover:not(:disabled) { background: #004d40; }
+
+.btn-ghost  { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+.btn-ghost:hover:not(:disabled) { background: var(--primary-lt); }
+
+.btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+.btn-danger:hover:not(:disabled) { background: var(--red-bg); }
+
+/* ── ローディング ─────────────────────────────────────── */
+.spin-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.spinner {
+  width: 13px; height: 13px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .65s linear infinite;
+  display: none;
+}
+.btn-ghost .spinner { border-color: rgba(21,101,192,.25); border-top-color: var(--primary); }
+.loading .spinner  { display: inline-block; }
+.loading .btn-lbl  { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 同期カード ───────────────────────────────────────── */
+.sync-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.sync-card {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.sync-card.wbs2ol { border-left: 5px solid var(--primary); }
+.sync-card.ol2wbs { border-left: 5px solid var(--teal); }
+.sync-card .s-dir  { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.sync-card .s-desc {
+  font-size: 12px; color: var(--text-sub);
+  margin-bottom: 16px; line-height: 1.5;
+}
+.sync-card .s-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── ログ ─────────────────────────────────────────────── */
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.log-area {
+  background: #1a2332;
+  color: #c8d6e5;
+  border-radius: 6px;
+  padding: 14px 16px;
+  font-family: "Consolas","Courier New",monospace;
+  font-size: 12.5px;
+  line-height: 1.75;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-area.log-main  { height: 280px; }
+.log-area.log-setup { height: 220px; }
+.log-create  { color: #69f0ae; }
+.log-update  { color: #40c4ff; }
+.log-delete  { color: #ffab40; }
+.log-skip    { color: #607d8b; }
+.log-done    { color: #69f0ae; font-weight: 700; }
+.log-error   { color: #ff5252; }
+.log-cmd     { color: #ce93d8; }
+.log-divider { color: #37474f; }
+
+/* ── アップロード ─────────────────────────────────────── */
+.upload-drop {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .18s, background .18s;
+  margin-bottom: 4px;
+}
+.upload-drop:hover,
+.upload-drop.drag-over { border-color: var(--primary); background: var(--primary-lt); }
+.upload-drop .u-icon { font-size: 30px; margin-bottom: 8px; display: block; }
+.upload-drop .u-sub  { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+
+/* ── ファイルテーブル ──────────────────────────────────── */
+.file-tbl { width: 100%; border-collapse: collapse; }
+.file-tbl th, .file-tbl td {
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.file-tbl th {
+  font-size: 11px; font-weight: 700; color: var(--text-sub);
+  text-transform: uppercase; letter-spacing: .6px;
+}
+.file-tbl tr:last-child td { border-bottom: none; }
+.file-tbl tr:hover td { background: var(--bg); }
+.file-tbl .td-actions { text-align: right; white-space: nowrap; display: flex; gap: 6px; justify-content: flex-end; }
+
+/* ── セットアップステップ ──────────────────────────────── */
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  background: var(--surface);
+}
+.step-num {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--primary); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  flex-shrink: 0;
+}
+.step-info { flex: 1; min-width: 0; }
+.step-info h3 { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.step-info p  { font-size: 11px; color: var(--text-sub); }
+.step-select  { width: 200px; flex-shrink: 0; }
+
+/* ── エンプティ・トースト ──────────────────────────────── */
+.empty { text-align: center; padding: 28px; color: var(--text-sub); font-size: 13px; }
+
+.toast {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: #263238;
+  color: #fff;
+  padding: 11px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.28);
+  z-index: 9999;
+  transform: translateY(70px);
+  opacity: 0;
+  transition: all .28s cubic-bezier(.4,0,.2,1);
+  pointer-events: none;
+}
+.toast.show  { transform: none; opacity: 1; }
+.toast.ok    { border-left: 4px solid #69f0ae; }
+.toast.ng    { border-left: 4px solid #ff5252; }
+
+@media (max-width: 640px) {
+  .sync-grid { grid-template-columns: 1fr; }
+  .form-row  { flex-direction: column; }
+  .step-row  { flex-wrap: wrap; }
+  .step-select { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ ヘッダー ══════════════════════════════════════════════════════ -->
+<header class="app-header">
+  <h1>WBS ↔ Outlook 同期ツール</h1>
+  <span class="header-chip">Local</span>
+</header>
+
+<!-- ══ タブバー ══════════════════════════════════════════════════════ -->
+<nav class="tab-bar">
+  <div class="tab-btn active" data-tab="sync">同期操作</div>
+  <div class="tab-btn" data-tab="files">ファイル管理</div>
+  <div class="tab-btn" data-tab="setup">セットアップ</div>
+</nav>
+
+<div class="page">
+
+  <!-- ══ 同期操作 ════════════════════════════════════════════════════ -->
+  <div id="tab-sync" class="tab-panel active">
+
+    <div class="card">
+      <div class="card-title">操作設定</div>
+      <div class="form-row">
+        <div class="form-group" style="max-width:280px">
+          <label>WBS ファイル</label>
+          <select id="sync-file" class="form-ctrl">
+            <option value="">ファイルを選択...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>AP_MailAddress（処理対象）</label>
+          <input id="sync-id" type="email" class="form-ctrl"
+                 placeholder="user@example.com">
+        </div>
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="gotoFiles()">＋ ファイル追加</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sync-grid">
+
+      <!-- WBS → Outlook -->
+      <div class="sync-card wbs2ol">
+        <div class="s-dir">WBS → Outlook</div>
+        <div class="s-desc">
+          WBSの予定日程（StartDate_p / FinishDate_p）を<br>
+          Outlookカレンダーに登録・更新します。<br>
+          完了タスクは Outlook 側を論理削除します。
+        </div>
+        <div class="s-btns">
+          <button id="btn-w2o" class="btn btn-blue"
+                  onclick="runSync('wbs2outlook','btn-w2o')">
+            <span class="spin-wrap">
+              <span class="spinner"></span>
+              <span class="btn-lbl">▶ 実行</span>
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Outlook → WBS -->
+      <div class="sync-card ol2wbs">
+        <div class="s-dir">Outlook → WBS</div>
+        <div class="s-desc">
+          Outlookカレンダーのイベント日程を<br>
+          WBSの実績欄（StartDate / FinishDate）に反映します。<br>
+          完了済みタスクは上書きしません。
+        </div>
+        <div class="s-btns">
+          <button id="btn-o2w" class="btn btn-teal"
+                  onclick="runSync('outlook2wbs','btn-o2w')">
+            <span class="spin-wrap">
+              <span class="spinner"></span>
+              <span class="btn-lbl">▶ 実行</span>
+            </span>
+          </button>
+          <button id="btn-dl" class="btn btn-ghost" onclick="downloadResult()" style="display:none">
+            ↓ ダウンロード
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="card" style="padding:16px 20px">
+      <div class="log-header">
+        <span style="font-size:12px;font-weight:700;color:var(--text-sub);text-transform:uppercase;letter-spacing:1px">実行ログ</span>
+        <button class="btn btn-ghost btn-sm" onclick="clearLog('log-main')">クリア</button>
+      </div>
+      <div id="log-main" class="log-area log-main">
+        <span class="log-skip">操作ボタンを押すと実行結果がここに表示されます。</span>
+      </div>
+    </div>
+
+  </div><!-- /tab-sync -->
+
+  <!-- ══ ファイル管理 ════════════════════════════════════════════════ -->
+  <div id="tab-files" class="tab-panel">
+
+    <div class="card">
+      <div class="card-title">WBS ファイルをアップロード</div>
+      <div class="upload-drop" id="drop-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)"
+           ondrop="onDrop(event)">
+        <span class="u-icon">📂</span>
+        <div>クリックまたはドラッグ&amp;ドロップ</div>
+        <div class="u-sub">.xlsx ファイルのみ対応</div>
+      </div>
+      <input type="file" id="file-input" accept=".xlsx" style="display:none"
+             onchange="uploadFile(this.files[0])">
+    </div>
+
+    <div class="card">
+      <div class="log-header">
+        <span class="card-title" style="margin:0;padding:0;border:none">ファイル一覧</span>
+        <button class="btn btn-ghost btn-sm" onclick="refreshFileList()">↺ 更新</button>
+      </div>
+      <div id="file-list"><div class="empty">ファイルがありません</div></div>
+    </div>
+
+  </div><!-- /tab-files -->
+
+  <!-- ══ セットアップ ════════════════════════════════════════════════ -->
+  <div id="tab-setup" class="tab-panel">
+
+    <div class="card">
+      <div class="card-title">既存WBSへのマイグレーション（初回のみ・順番通りに実行）</div>
+
+      <!-- Step 1 -->
+      <div class="step-row">
+        <div class="step-num">1</div>
+        <div class="step-info">
+          <h3>時間列を追加（StartTime_p / FinishTime_p）</h3>
+          <p>列L: 開始予定時刻 / 列N: 終了予定時刻 を追加します</p>
+        </div>
+        <select id="s1-file" class="form-ctrl step-select">
+          <option value="">ファイルを選択...</option>
+        </select>
+        <button id="btn-s1" class="btn btn-ghost"
+                onclick="runSetup('add-time-cols','s1-file','btn-s1')">
+          <span class="spin-wrap">
+            <span class="spinner"></span>
+            <span class="btn-lbl">▶ 実行</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="step-row">
+        <div class="step-num">2</div>
+        <div class="step-info">
+          <h3>Status 列を追加</h3>
+          <p>列Q: Status（未着手 / 進行中 / 完了 を自動計算）を追加します</p>
+        </div>
+        <select id="s2-file" class="form-ctrl step-select">
+          <option value="">ファイルを選択...</option>
+        </select>
+        <button id="btn-s2" class="btn btn-ghost"
+                onclick="runSetup('add-status-col','s2-file','btn-s2')">
+          <span class="spin-wrap">
+            <span class="spinner"></span>
+            <span class="btn-lbl">▶ 実行</span>
+          </span>
+        </button>
+      </div>
+
+    </div><!-- /migration card -->
+
+    <div class="card">
+      <div class="card-title">新規 WBS 作成</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>ファイル名</label>
+          <input id="nw-name" type="text" class="form-ctrl" placeholder="新規WBS.xlsx">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>ガント開始日</label>
+          <input id="nw-start" type="date" class="form-ctrl">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>ガント終了日</label>
+          <input id="nw-end" type="date" class="form-ctrl">
+        </div>
+        <div>
+          <button id="btn-nw" class="btn btn-blue" onclick="runNewWbs()">
+            <span class="spin-wrap">
+              <span class="spinner"></span>
+              <span class="btn-lbl">▶ 作成</span>
+            </span>
+          </button>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--text-sub);margin-top:6px">
+        作成後は「ファイル管理」タブからダウンロードできます。
+      </p>
+    </div>
+
+    <div class="card" style="padding:16px 20px">
+      <div class="log-header">
+        <span style="font-size:12px;font-weight:700;color:var(--text-sub);text-transform:uppercase;letter-spacing:1px">セットアップログ</span>
+        <button class="btn btn-ghost btn-sm" onclick="clearLog('log-setup')">クリア</button>
+      </div>
+      <div id="log-setup" class="log-area log-setup">
+        <span class="log-skip">セットアップ操作の結果がここに表示されます。</span>
+      </div>
+    </div>
+
+  </div><!-- /tab-setup -->
+
+</div><!-- /page -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ─── 状態 ────────────────────────────────────────────────────────────────
+let _lastDlFile = null;
+
+// ─── タブ ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const name = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p =>
+      p.classList.toggle('active', p.id === 'tab-' + name));
+    if (name === 'files') refreshFileList();
+    if (name === 'setup') refreshSetupSelects();
+  });
+});
+
+function gotoFiles() {
+  document.querySelector('[data-tab="files"]').click();
+}
+
+// ─── ファイル操作 ─────────────────────────────────────────────────────────
+async function fetchFiles() {
+  const res = await fetch('/files');
+  return res.ok ? res.json() : [];
+}
+
+async function refreshSyncSelect() {
+  const files = await fetchFiles();
+  const sel = document.getElementById('sync-file');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">ファイルを選択...</option>';
+  files.forEach(f => {
+    const o = new Option(f, f, false, f === cur);
+    sel.appendChild(o);
+  });
+}
+
+async function refreshSetupSelects() {
+  const files = await fetchFiles();
+  ['s1-file', 's2-file'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">ファイルを選択...</option>';
+    files.forEach(f => sel.appendChild(new Option(f, f, false, f === cur)));
+  });
+}
+
+async function refreshFileList() {
+  const files = await fetchFiles();
+  const el = document.getElementById('file-list');
+  if (!files.length) {
+    el.innerHTML = '<div class="empty">ファイルがありません</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="file-tbl">
+      <thead><tr><th>ファイル名</th><th style="text-align:right">操作</th></tr></thead>
+      <tbody>
+        ${files.map(f => `
+        <tr>
+          <td>${esc(f)}</td>
+          <td><div class="td-actions">
+            <button class="btn btn-ghost btn-sm" onclick="dlFile('${esc(f)}')">↓ ダウンロード</button>
+            <button class="btn btn-danger btn-sm" onclick="delFile('${esc(f)}')">削除</button>
+          </div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── ドラッグ&ドロップ ──────────────────────────────────────────────────
+function onDragOver(e)  { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+function onDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) uploadFile(f);
+}
+
+async function uploadFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.xlsx')) { toast('ng', '.xlsx ファイルのみアップロードできます'); return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  const res  = await fetch('/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (res.ok) {
+    toast('ok', data.message);
+    refreshFileList();
+    refreshSyncSelect();
+  } else {
+    toast('ng', data.error);
+  }
+  document.getElementById('file-input').value = '';
+}
+
+function dlFile(name) { window.location = `/files/${encodeURIComponent(name)}`; }
+
+async function delFile(name) {
+  if (!confirm(`「${name}」を削除しますか？`)) return;
+  const res  = await fetch(`/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  const data = await res.json();
+  toast(res.ok ? 'ok' : 'ng', data.message || data.error);
+  refreshFileList();
+  refreshSyncSelect();
+  refreshSetupSelects();
+}
+
+// ─── 同期実行 ──────────────────────────────────────────────────────────────
+async function runSync(command, btnId) {
+  const file = document.getElementById('sync-file').value;
+  const id   = document.getElementById('sync-id').value.trim();
+  if (!file) { toast('ng', 'WBSファイルを選択してください'); return; }
+  if (!id)   { toast('ng', 'AP_MailAddress を入力してください'); return; }
+
+  setLoad(btnId, true);
+  document.getElementById('btn-dl').style.display = 'none';
+  clearLog('log-main');
+  addLog('log-main', `$ wbs_outlook_sync.py ${command} --file ${file} --id ${id}`, 'cmd');
+  addLog('log-main', '', '');
+
+  const res = await fetch('/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command, filename: file, ap_mail: id }),
+  });
+  const { job_id, error } = await res.json();
+  if (error) { addLog('log-main', 'エラー: ' + error, 'error'); setLoad(btnId, false); return; }
+
+  streamLog(job_id, 'log-main', () => {
+    setLoad(btnId, false);
+    if (command === 'outlook2wbs') {
+      _lastDlFile = file;
+      document.getElementById('btn-dl').style.display = '';
+    }
+    refreshFileList();
+    refreshSyncSelect();
+  });
+}
+
+// ─── セットアップ実行 ──────────────────────────────────────────────────────
+async function runSetup(command, selId, btnId) {
+  const file = document.getElementById(selId).value;
+  if (!file) { toast('ng', 'ファイルを選択してください'); return; }
+
+  setLoad(btnId, true);
+  addLog('log-setup', `$ wbs_outlook_sync.py ${command} --file ${file}`, 'cmd');
+  addLog('log-setup', '', '');
+
+  const res = await fetch('/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command, filename: file }),
+  });
+  const { job_id, error } = await res.json();
+  if (error) { addLog('log-setup', 'エラー: ' + error, 'error'); setLoad(btnId, false); return; }
+
+  streamLog(job_id, 'log-setup', () => {
+    setLoad(btnId, false);
+    refreshFileList();
+    refreshSetupSelects();
+  });
+}
+
+// ─── 新規WBS作成 ───────────────────────────────────────────────────────────
+async function runNewWbs() {
+  let name  = document.getElementById('nw-name').value.trim();
+  const s   = document.getElementById('nw-start').value;
+  const e   = document.getElementById('nw-end').value;
+  if (!name) { toast('ng', 'ファイル名を入力してください'); return; }
+  if (!s)    { toast('ng', 'ガント開始日を選択してください'); return; }
+  if (!e)    { toast('ng', 'ガント終了日を選択してください'); return; }
+  if (!name.toLowerCase().endsWith('.xlsx')) name += '.xlsx';
+
+  setLoad('btn-nw', true);
+  addLog('log-setup', `$ wbs_outlook_sync.py new-wbs --output ${name} --gantt-start ${s} --gantt-end ${e}`, 'cmd');
+
+  const res = await fetch('/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command: 'new-wbs', filename: name, gantt_start: s, gantt_end: e }),
+  });
+  const { job_id, error } = await res.json();
+  if (error) { addLog('log-setup', 'エラー: ' + error, 'error'); setLoad('btn-nw', false); return; }
+
+  streamLog(job_id, 'log-setup', () => {
+    setLoad('btn-nw', false);
+    refreshFileList();
+    refreshSetupSelects();
+    refreshSyncSelect();
+  });
+}
+
+function downloadResult() {
+  if (_lastDlFile) dlFile(_lastDlFile);
+}
+
+// ─── SSE ログストリーム ────────────────────────────────────────────────────
+function streamLog(jobId, areaId, onDone) {
+  const es = new EventSource(`/run/stream/${jobId}`);
+  es.onmessage = ev => {
+    const raw = ev.data;
+    if (raw === '[DONE]' || raw === '[TIMEOUT]') { es.close(); onDone && onDone(); return; }
+    const line = JSON.parse(raw);
+    addLog(areaId, line, classifyLine(line));
+  };
+  es.onerror = () => { es.close(); onDone && onDone(); };
+}
+
+function classifyLine(line) {
+  if (line.includes('作成:'))     return 'create';
+  if (line.includes('更新:'))     return 'update';
+  if (line.includes('論理削除:')) return 'delete';
+  if (line.includes('スキップ'))  return 'skip';
+  if (/^完了:/.test(line))        return 'done';
+  if (/エラー|Error|Traceback/.test(line)) return 'error';
+  if (/^---/.test(line))          return 'divider';
+  return '';
+}
+
+// ─── ログ表示 ─────────────────────────────────────────────────────────────
+function addLog(areaId, text, cls) {
+  const area = document.getElementById(areaId);
+  const span = document.createElement('span');
+  if (cls) span.className = `log-${cls}`;
+  span.textContent = text;
+  area.appendChild(span);
+  area.appendChild(document.createTextNode('\n'));
+  area.scrollTop = area.scrollHeight;
+}
+
+function clearLog(areaId) {
+  document.getElementById(areaId).textContent = '';
+}
+
+// ─── ユーティリティ ───────────────────────────────────────────────────────
+function setLoad(btnId, on) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.disabled = on;
+  btn.classList.toggle('loading', on);
+}
+
+function toast(type, msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type}`;
+  void el.offsetWidth;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ─── 初期化 ───────────────────────────────────────────────────────────────
+(function init() {
+  refreshSyncSelect();
+  // 新規WBS日付デフォルト（当月初日〜3ヶ月後末日）
+  const today = new Date();
+  const y = today.getFullYear(), m = today.getMonth();
+  document.getElementById('nw-start').value =
+    new Date(y, m, 1).toISOString().slice(0, 10);
+  document.getElementById('nw-end').value =
+    new Date(y, m + 3, 0).toISOString().slice(0, 10);
+})();
+</script>
+</body>
+</html>
